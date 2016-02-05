@@ -1,9 +1,6 @@
 
 #include "DynamixelBus.h"
 
-#if LOG_LEVEL > LOG_NONE
-char _log_buf[LOG_BUFFER_SIZE];
-#endif
 
 const uint32_t DynamixelBus::sSerialBaudRateMap[10] = {  0, 9600, 19200, 57600, 115200, 200000, 250000, 400000, 500000, 1000000 };
 const uint8_t DynamixelBus::sServoBaudRateMap[10] = {  0, 0xCF, 0x67, 0x22, 0x10, 0x09, 0x07, 0x04, 0x03, 0x01 };
@@ -54,12 +51,10 @@ void DynamixelBus::begin(BaudRate baudRate, uint8_t config) {
 }
 
 bool DynamixelBus::checkWriteStatus(uint8_t servoId) {
-  log_P(LOG_FINEST,"servoId=%u return-level=%u",servoId,mpServoState[servoId].mStatusReturnLevel);
   return servoId != 0xFE && mpServoState[servoId].mStatusReturnLevel == kRespondToAll;
 }
 
 bool DynamixelBus::checkReadStatus(uint8_t servoId) {
-  log_P(LOG_FINEST,"servoId=%u return-level=%u",servoId,mpServoState[servoId].mStatusReturnLevel);
   return servoId != 0xFE && mpServoState[servoId].mStatusReturnLevel != kRespondToNone;
 }
 
@@ -162,14 +157,12 @@ uint8_t DynamixelBus::getStatusPacket() {
 }
 
 uint8_t DynamixelBus::writeData(uint8_t* pPayload, size_t payloadLength) {
-  log_P(LOG_FINEST,"--> %s",__PRETTY_FUNCTION__);
   putInstructionPacket(pPayload,payloadLength);
   if (checkWriteStatus(pPayload[0])) {
     uint8_t error = kReadError;
     size_t attempts = 0;
     while ((error & kReadError) && (attempts < mMaxRetriesOnError)) {
       error = getStatusPacket();
-      log_P(LOG_DEBUG,"receive write status servoId=%u attempt=%u error=%u",pPayload[0],attempts,error);
       if (!error) break;
       attempts++;
       delay(attempts * 10);
@@ -181,7 +174,6 @@ uint8_t DynamixelBus::writeData(uint8_t* pPayload, size_t payloadLength) {
     putInstructionPacket(pPayload,payloadLength);
     return kOk;
   }
-  log_P(LOG_FINEST,"<-- %s",__PRETTY_FUNCTION__);
 }
 
 uint8_t DynamixelBus::writeDataB(uint8_t servoId, uint8_t address, bool value) {
@@ -226,21 +218,18 @@ uint8_t DynamixelBus::writeData16(uint8_t servoId, uint8_t address, uint16_t val
 }
 
 uint8_t DynamixelBus::readData(uint8_t* pPayloadOut, size_t outputLength, uint8_t* pPayloadIn, size_t inputLength) {
-  log_P(LOG_FINEST,"--> %s",__PRETTY_FUNCTION__);
   uint8_t error = kReadNotAllowedError;
   putInstructionPacket(pPayloadOut,outputLength);
   if (checkReadStatus(pPayloadOut[0])) {
     size_t attempts = 0;
     while ((error & kReadError) && (attempts < mMaxRetriesOnError)) {
       error = getStatusPacket(pPayloadIn,inputLength);
-      log_P(LOG_DEBUG,"receive read status message servoId=%u attempt=%u error=%u",pPayloadOut[0],attempts,error);
       if (!error) break;
       attempts++;
       delay(attempts * 10);
       putInstructionPacket(pPayloadOut,outputLength);
     }
   }
-  log_P(LOG_FINEST,"<-- %s",__PRETTY_FUNCTION__);
   return error;
 }
 

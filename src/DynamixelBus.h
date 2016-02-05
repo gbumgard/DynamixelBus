@@ -4,59 +4,6 @@
 #include "Arduino.h"
 #include "HalfDuplexHardwareSerial.h"
 
-#define DEBUG 0
-
-
-#define LOG_BUFFER_SIZE 132
-#define LOG_NONE      0
-#define LOG_SEVERE    1
-#define LOG_WARNING   2
-#define LOG_INFO      3
-#define LOG_DEBUG     4
-#define LOG_FINE      5
-#define LOG_FINER     6
-#define LOG_FINEST    7
-#define LOG_ALL       LOG_FINEST
-
-#ifndef LOG_LEVEL
-#ifdef DEBUG
-#define LOG_LEVEL LOG_DEBUG
-#else
-#define LOG_LEVEL LOG_NONE
-#endif
-#endif
-
-#define LOG_LEVEL LOG_NONE
-
-#define LOG_MSG_0_PREFIX   ""
-#define LOG_MSG_1_PREFIX   " SEVERE  :"
-#define LOG_MSG_2_PREFIX   " WARNING :"
-#define LOG_MSG_3_PREFIX   " INFO    :"
-#define LOG_MSG_4_PREFIX   " DEBUG   :"
-#define LOG_MSG_5_PREFI    " FINE    :"
-#define LOG_MSG_6_PREFIX   " FINER   :"
-#define LOG_MSG_7_PREFIX   " FINEST  :"
-#define LOG_MSG_PREFIX(level) LOG_MSG_ ## level ## _PREFIX
-
-#if LOG_LEVEL > LOG_NONE
-extern char _log_buf[LOG_BUFFER_SIZE];
-#else
-extern char _log_buf[];
-#endif
-
-#define log(level,fmt, ...)  \
-  do { \
-    if (level <= LOG_LEVEL) { \
-      sprintf(_log_buf,fmt, __VA_ARGS__); \
-      Serial.println(_log_buf);} \
-  } while (0)
-
-#define log_P(level,fmt, ...)  \
-  do { \
-    if (level <= LOG_LEVEL) { \
-      sprintf_P(_log_buf,PSTR(fmt), __VA_ARGS__); \
-      Serial.println(_log_buf);} \
-  } while (0)
 
 /**
  * 

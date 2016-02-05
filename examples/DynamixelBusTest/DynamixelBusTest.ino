@@ -51,7 +51,7 @@ DynamixelBus dynamixel(Serial1);
 #define TEST_RETURN_DELAY_TIME      FALSE
 #define TEST_ANGLE_LIMITS           FAKSE
 #define TEST_TEMPERATURE_LIMIT      FALSE
-#define TEST_VOLTAGE_LIMITS         TRUE
+#define TEST_VOLTAGE_LIMITS         FALSE
 #define TEST_INITIAL_TORQUE_LIMIT   FALSE
 #define TEST_STATUS_RETURN_LEVEL    FALSE
 #define TEST_ALARM_LED              FALSE
