@@ -1,7 +1,33 @@
 
 #include "DynamixelBus.h"
 
-const DynamixelBus::BaudRate DynamixelBus::sBaudRates[10] = {  kUnknown, k9600,k19200,k57600,k115200,k200000,k250000,k400000,k500000,k1000000 };
+#if LOG_LEVEL > LOG_NONE
+char _log_buf[LOG_BUFFER_SIZE];
+#endif
+
+const uint32_t DynamixelBus::sSerialBaudRateMap[10] = {  0, 9600, 19200, 57600, 115200, 200000, 250000, 400000, 500000, 1000000 };
+const uint8_t DynamixelBus::sServoBaudRateMap[10] = {  0, 0xCF, 0x67, 0x22, 0x10, 0x09, 0x07, 0x04, 0x03, 0x01 };
+
+const uint8_t DynamixelBus::kRespondToNone         = 0x00;
+const uint8_t DynamixelBus::kRespondToRead         = 0x01;
+const uint8_t DynamixelBus::kRespondToAll          = 0x02;
+const uint8_t DynamixelBus::kClockwise             = 0x00;
+const uint8_t DynamixelBus::kCounterClockwise      = 0x01;
+
+const uint8_t DynamixelBus::kOk                    = 0x00;
+const uint8_t DynamixelBus::kReadError             = 0x80;
+const uint8_t DynamixelBus::kReadNotAllowedError   = 0x81;
+const uint8_t DynamixelBus::kReadTimeoutError      = 0x82;
+const uint8_t DynamixelBus::kReadFramingError      = 0x84;
+const uint8_t DynamixelBus::kReadChecksumError     = 0x88;
+
+const uint8_t DynamixelBus::kInstructionError      = 0x40;
+const uint8_t DynamixelBus::kOverloadError         = 0x20;
+const uint8_t DynamixelBus::kChecksumError         = 0x10;
+const uint8_t DynamixelBus::kRangeError            = 0x08;
+const uint8_t DynamixelBus::kTemperatureLimitError = 0x04;
+const uint8_t DynamixelBus::kAngleLimitError       = 0x02;
+const uint8_t DynamixelBus::kVoltageLimitError     = 0x01;
 
 DynamixelBus::DynamixelBus(HardwareSerial& serial)
 : mSerial(serial)
@@ -9,15 +35,36 @@ DynamixelBus::DynamixelBus(HardwareSerial& serial)
 , mReadTimeoutMs(18)
 , mMaxRetriesOnError(1)
 {
-  
+  for (size_t i=0; i<255; i++) {
+    mpServoState[i].mBaudRate = kUnknown;
+    mpServoState[i].mStatusReturnLevel = kRespondToNone;
+  }
 }
 
 DynamixelBus::~DynamixelBus() {
   delete[] mpServoState;
 }
 
+void DynamixelBus::begin(BaudRate baudRate) {
+  mSerial.begin(sSerialBaudRateMap[(size_t)baudRate]);
+}
+
+void DynamixelBus::begin(BaudRate baudRate, uint8_t config) {
+  mSerial.begin(sSerialBaudRateMap[(size_t)baudRate], config);
+}
+
+bool DynamixelBus::checkWriteStatus(uint8_t servoId) {
+  log_P(LOG_FINEST,"servoId=%u return-level=%u",servoId,mpServoState[servoId].mStatusReturnLevel);
+  return servoId != 0xFE && mpServoState[servoId].mStatusReturnLevel == kRespondToAll;
+}
+
+bool DynamixelBus::checkReadStatus(uint8_t servoId) {
+  log_P(LOG_FINEST,"servoId=%u return-level=%u",servoId,mpServoState[servoId].mStatusReturnLevel);
+  return servoId != 0xFE && mpServoState[servoId].mStatusReturnLevel != kRespondToNone;
+}
+
+
 void DynamixelBus::putInstructionPacket(uint8_t* pPayload, size_t payloadLength) {
-  //Serial.println("-> putInstruction");
   uint16_t checksum = 0;
   while(mSerial.read() != -1);
   mSerial.setDirection(kTransmitOnly);
@@ -25,38 +72,36 @@ void DynamixelBus::putInstructionPacket(uint8_t* pPayload, size_t payloadLength)
   mSerial.write(0xFF);
   for (size_t i = 0; i < payloadLength; i++) {
     uint8_t byte = pPayload[i];
-    //Serial.print(byte);
-    //Serial.print(" ");
     mSerial.write(byte);
     checksum += byte;
-    //mSerial.flush();
+    mSerial.flush();
   }
   checksum = (~checksum) & 0xFF;
   mSerial.writeLast(checksum);
-  //Serial.println(" <- putInstruction");
 }
 
 uint8_t DynamixelBus::getStatusPacket(uint8_t* pPayload, size_t payloadLength) {
-  //Serial.println("-> getStatusPacket");
   uint8_t checksum = 0;
-  unsigned long timeout;
+  unsigned long timeout = millis() + mReadTimeoutMs;
   bool isTimeout = false;
   size_t count = 0;
   size_t length = payloadLength + 3;
   uint8_t* ptr = pPayload;
+  uint8_t error = kOk;
   while (count < length && !isTimeout) {
-    timeout = millis() + mReadTimeoutMs;
     while (!mSerial.available()) {
       isTimeout = (millis() > timeout); 
       if (isTimeout) {
-        return kReadTimeOutError;
+        return kReadTimeoutError;
         break;
       }
     }
     uint8_t byte = mSerial.read();
     if (count == 0 || count == 1) {
       if (byte != 0xFF) {
-        return kReadFramingError;
+        error = kReadFramingError;
+        count = 0;
+        continue;
       }
       count++;
       continue;
@@ -72,31 +117,31 @@ uint8_t DynamixelBus::getStatusPacket(uint8_t* pPayload, size_t payloadLength) {
       checksum += byte;
     }
   }
-  //Serial.println("<- getStatusPacket");
-  return pPayload[2];
+  return error != kOk ? error : pPayload[2];
 }
 
 uint8_t DynamixelBus::getStatusPacket() {
-  //Serial.println("-> getStatusPacket");
   uint8_t checksum = 0;
-  unsigned long timeout;
+  unsigned long timeout = millis() + mReadTimeoutMs;
   bool isTimeout = false;
   size_t count = 0;
-  uint8_t error = 0;
+  uint8_t error = kOk;
   while (count < 6 && !isTimeout) {
-    timeout = millis() + mReadTimeoutMs;
     while (!mSerial.available()) {
       isTimeout = (millis() > timeout); 
       if (isTimeout) {
-        return kReadTimeOutError;
+        return kReadTimeoutError;
         break;
       }
     }
     uint8_t byte = mSerial.read();
     if (count == 0 || count == 1) {
       if (byte != 0xFF) {
-        return kReadFramingError;
+        count = 0;
+        error = kReadFramingError;
+        continue;
       }
+      error = kOk;
       count++;
       continue;
     }
@@ -113,8 +158,30 @@ uint8_t DynamixelBus::getStatusPacket() {
       checksum += byte;
     }
   }
-  //Serial.println("<- getStatusPacket");
   return error;
+}
+
+uint8_t DynamixelBus::writeData(uint8_t* pPayload, size_t payloadLength) {
+  log_P(LOG_FINEST,"--> %s",__PRETTY_FUNCTION__);
+  putInstructionPacket(pPayload,payloadLength);
+  if (checkWriteStatus(pPayload[0])) {
+    uint8_t error = kReadError;
+    size_t attempts = 0;
+    while ((error & kReadError) && (attempts < mMaxRetriesOnError)) {
+      error = getStatusPacket();
+      log_P(LOG_DEBUG,"receive write status servoId=%u attempt=%u error=%u",pPayload[0],attempts,error);
+      if (!error) break;
+      attempts++;
+      delay(attempts * 10);
+      putInstructionPacket(pPayload,payloadLength);
+    }
+    return error;
+  }
+  else {
+    putInstructionPacket(pPayload,payloadLength);
+    return kOk;
+  }
+  log_P(LOG_FINEST,"<-- %s",__PRETTY_FUNCTION__);
 }
 
 uint8_t DynamixelBus::writeDataB(uint8_t servoId, uint8_t address, bool value) {
@@ -126,8 +193,7 @@ uint8_t DynamixelBus::writeData8(uint8_t servoId, uint8_t address, uint8_t value
   out[0] = servoId;
   out[3] = address;
   out[4] = value;
-  putInstructionPacket(out,sizeof(out));
-  return checkWriteStatus(servoId) ? getStatusPacket() : 0;
+  return writeData(out,sizeof(out));
 }
 
 uint8_t DynamixelBus::writeData16(uint8_t servoId, uint8_t address, uint16_t value) {
@@ -136,8 +202,7 @@ uint8_t DynamixelBus::writeData16(uint8_t servoId, uint8_t address, uint16_t val
   out[3] = address;
   out[4] = value & 0xFF;
   out[5] = (value >> 8) & 0x3;
-  putInstructionPacket(out,sizeof(out));
-  return checkWriteStatus(servoId) ? getStatusPacket() : 0;
+  return writeData(out,sizeof(out));
 }
 
 uint8_t DynamixelBus::writeData8(uint8_t servoId, uint8_t address, uint8_t value1, uint8_t value2) {
@@ -146,8 +211,7 @@ uint8_t DynamixelBus::writeData8(uint8_t servoId, uint8_t address, uint8_t value
   out[3] = address;
   out[4] = value1;
   out[5] = value2;
-  putInstructionPacket(out,sizeof(out));
-  return checkWriteStatus(servoId) ? getStatusPacket() : 0;
+  return writeData(out,sizeof(out));
 }
 
 uint8_t DynamixelBus::writeData16(uint8_t servoId, uint8_t address, uint16_t value1, uint16_t value2) {
@@ -158,8 +222,26 @@ uint8_t DynamixelBus::writeData16(uint8_t servoId, uint8_t address, uint16_t val
   out[5] = (value1 >> 8) & 0x3;
   out[6] = value2 & 0xFF;
   out[7] = (value2 >> 8) & 0x3;
-  putInstructionPacket(out,sizeof(out));
-  return checkWriteStatus(servoId) ? getStatusPacket() : 0;
+  return writeData(out,sizeof(out));
+}
+
+uint8_t DynamixelBus::readData(uint8_t* pPayloadOut, size_t outputLength, uint8_t* pPayloadIn, size_t inputLength) {
+  log_P(LOG_FINEST,"--> %s",__PRETTY_FUNCTION__);
+  uint8_t error = kReadNotAllowedError;
+  putInstructionPacket(pPayloadOut,outputLength);
+  if (checkReadStatus(pPayloadOut[0])) {
+    size_t attempts = 0;
+    while ((error & kReadError) && (attempts < mMaxRetriesOnError)) {
+      error = getStatusPacket(pPayloadIn,inputLength);
+      log_P(LOG_DEBUG,"receive read status message servoId=%u attempt=%u error=%u",pPayloadOut[0],attempts,error);
+      if (!error) break;
+      attempts++;
+      delay(attempts * 10);
+      putInstructionPacket(pPayloadOut,outputLength);
+    }
+  }
+  log_P(LOG_FINEST,"<-- %s",__PRETTY_FUNCTION__);
+  return error;
 }
 
 uint8_t DynamixelBus::readDataB(uint8_t servoId, uint8_t address, bool& value) {
@@ -172,12 +254,11 @@ uint8_t DynamixelBus::readDataB(uint8_t servoId, uint8_t address, bool& value) {
 uint8_t DynamixelBus::readData8(uint8_t servoId, uint8_t address, uint8_t& value) {
   static uint8_t out[] = { 0, 4, kReadDataInstruction, 0, 1 };
   static uint8_t in[4];
-  if (servoId == 0xFE) return 0;
+  if (servoId == 0xFE || !checkReadStatus(servoId)) return kReadNotAllowedError;
   out[0] = servoId;
   out[3] = address;
-  putInstructionPacket(out,sizeof(out));
-  uint8_t error = 0;
-  if (checkReadStatus(servoId) && (error = getStatusPacket(in,sizeof(in))) == 0) {
+  uint8_t error = readData(out,sizeof(out),in,sizeof(in));
+  if (!error) {
     value = in[3];
   }
   return error;
@@ -186,12 +267,11 @@ uint8_t DynamixelBus::readData8(uint8_t servoId, uint8_t address, uint8_t& value
 uint8_t DynamixelBus::readData16(uint8_t servoId, uint8_t address, uint16_t& value) {
   static uint8_t out[] = { 0, 4, kReadDataInstruction, 0, 2 };
   static uint8_t in[5];
-  if (servoId == 0xFE) return 0;
+  if (servoId == 0xFE || !checkReadStatus(servoId)) return kReadNotAllowedError;
   out[0] = servoId;
   out[3] = address;
-  putInstructionPacket(out,sizeof(out));
-  uint8_t error = 0;
-  if (checkReadStatus(servoId) && (error = getStatusPacket(in,sizeof(in))) == 0) {
+  uint8_t error = readData(out,sizeof(out),in,sizeof(in));
+  if (!error) {
     value = in[3] | ((in[4] & 0x3) << 8);
   }
   return error;
@@ -200,12 +280,11 @@ uint8_t DynamixelBus::readData16(uint8_t servoId, uint8_t address, uint16_t& val
 uint8_t DynamixelBus::readData8(uint8_t servoId, uint8_t address, uint8_t& value1, uint8_t& value2) {
   static uint8_t out[] = { 0, 4, kReadDataInstruction, 0, 2 };
   static uint8_t in[5];
-  if (servoId == 0xFE) return 0;
+  if (servoId == 0xFE || !checkReadStatus(servoId)) return kReadNotAllowedError;
   out[0] = servoId;
   out[3] = address;
-  putInstructionPacket(out,sizeof(out));
-  uint8_t error = 0;
-  if (checkReadStatus(servoId) && (error = getStatusPacket(in,sizeof(in))) == 0) {
+  uint8_t error = readData(out,sizeof(out),in,sizeof(in));
+  if (!error) {
     value1 = in[3];
     value2 = in[4];
   }
@@ -215,33 +294,29 @@ uint8_t DynamixelBus::readData8(uint8_t servoId, uint8_t address, uint8_t& value
 uint8_t DynamixelBus::readData16(uint8_t servoId, uint8_t address, uint16_t& value1, uint16_t& value2) {
   static uint8_t out[] = { 0, 4, kReadDataInstruction, 0, 4 };
   static uint8_t in[7];
-  if (servoId == 0xFE) return 0;
+  if (servoId == 0xFE || !checkReadStatus(servoId)) return kReadNotAllowedError;
   out[0] = servoId;
   out[3] = address;
-  putInstructionPacket(out,sizeof(out));
-  uint8_t error = 0;
-  if (checkReadStatus(servoId) && (error = getStatusPacket(in,sizeof(in))) == 0) {
+  uint8_t error = readData(out,sizeof(out),in,sizeof(in));
+  if (!error) {
     value1 = in[3] | ((in[4] & 0x3) << 8);
     value2 = in[5] | ((in[6] & 0x3) << 8);
   }
   return error;
 }
 
-uint8_t DynamixelBus::ping(uint8_t servoId, size_t retries) {
+bool DynamixelBus::ping(uint8_t servoId) {
   static uint8_t out[] = { 0, 2, kPingInstruction };
   out[0] = servoId;
   uint8_t error = 0;
   if (checkReadStatus(servoId)) {
-    for (size_t i = 0; i <= retries; i++) {
+    for (size_t i = 0; i <= mMaxRetriesOnError; i++) {
       putInstructionPacket(out,sizeof(out));
       error = getStatusPacket();
-      if (!error || (error & kReadError == 0)) return error;
+      if (!error) return true;
     }
   }
-  else {
-    putInstructionPacket(out,sizeof(out));
-  }
-  return error;
+  return false;
 }
 
 uint8_t DynamixelBus::reset(uint8_t servoId) {
@@ -254,15 +329,14 @@ uint8_t DynamixelBus::reset(uint8_t servoId) {
 size_t DynamixelBus::discover(uint8_t* pIds, size_t servoCount, uint8_t maxId) {
   size_t count = 0;
   for (size_t servoId = 0; servoId < 254; servoId++) {
-    mpServoState[servoId].mBaudRateIndex = 0;
+    mpServoState[servoId].mBaudRate = kUnknown;
   }
-  for (size_t baudRateIndex=1; baudRateIndex < 10 && count < servoCount; baudRateIndex++) {
-    BaudRate baud = sBaudRates[baudRateIndex];
-    mSerial.begin(baud);
+  for (size_t baudRateIndex=9; baudRateIndex > 0 && count < servoCount; baudRateIndex--) {
+    mSerial.begin(sSerialBaudRateMap[baudRateIndex]);
     for (size_t servoId=0; servoId<maxId && count < servoCount; servoId++) {
-      if (mpServoState[servoId].mBaudRateIndex == 0) {
-        if (ping(servoId) == 0) {
-          mpServoState[servoId].mBaudRateIndex = baudRateIndex;
+      if (mpServoState[servoId].mBaudRate == kUnknown) {
+        if (ping(servoId)) {
+          mpServoState[servoId].mBaudRate = (BaudRate)baudRateIndex;
           if (pIds) pIds[count++] = servoId;
         }
       }
@@ -287,38 +361,49 @@ uint8_t DynamixelBus::getId(uint8_t servoId, uint8_t& id) {
   return readData8(servoId, kServoId, id);
 }
 
-uint8_t DynamixelBus::setBaudRate(BaudRate baudRate) {
+uint8_t DynamixelBus::setBaudRate(BaudRate baudRate, size_t servoCount, size_t maxServoId) {
+  discover(0,servoCount,maxServoId);
   BaudRate last = kUnknown;
+  uint8_t error = kOk;
   for (size_t servoId = 0; servoId < 253; servoId++) {
-    BaudRate baud = sBaudRates[mpServoState[servoId].mBaudRateIndex];
-    if (baud == kUnknown) continue;
+    BaudRate baud = mpServoState[servoId].mBaudRate;
+    if (baud == kUnknown || baud == baudRate) continue;
     if (baud != last) {
       mSerial.begin(baud);
       last = baud;
     }
-    setBaudRate(servoId,baudRate);
+    error = setBaudRate(servoId,baudRate);
   }
   mSerial.begin(baudRate);
+  return error;
 }
 
 uint8_t DynamixelBus::setBaudRate(uint8_t servoId, BaudRate baudRate) {
-  uint8_t baud = ((uint32_t)2000000 - (uint32_t)baudRate) / (uint32_t)baudRate;
-  uint8_t error = writeData8(servoId, kServoBaudRate, baud);
+  uint8_t error = writeData8(servoId, kServoBaudRate, sServoBaudRateMap[(size_t)baudRate]);
   if (!error) {
-    size_t index;
-    for (index = 1; index < 10; index++) {
-      if (sBaudRates[index] == baudRate) {
-        mpServoState[servoId].mBaudRateIndex = index;
-        return 0;
-        break;
-      }
-    }
+     mpServoState[servoId].mBaudRate = baudRate;
   }
+  return error;
 }
 
 uint8_t DynamixelBus::getBaudRate(uint8_t servoId, BaudRate& baudRate) {
-  baudRate = sBaudRates[mpServoState[servoId].mBaudRateIndex];
-  return 0;
+  baudRate = mpServoState[servoId].mBaudRate;
+  if (baudRate == kUnknown) {
+    uint8_t servoBaud = kOk;
+    uint8_t error = readData8(servoId, kServoBaudRate, servoBaud);
+    if (!error) {
+      size_t index;
+      for (index = 1; index < 10; index++) {
+        if (sServoBaudRateMap[index] == servoBaud) {
+          mpServoState[servoId].mBaudRate = (BaudRate)index;
+          return kOk;
+        }
+      }
+      baudRate = kUnknown;
+    }
+    return error;
+  }
+  return kOk;
 }
 
 uint8_t DynamixelBus::setReturnDelayTime(uint8_t servoId, uint16_t usec) {
@@ -348,12 +433,20 @@ uint8_t DynamixelBus::getTemperatureLimit(uint8_t servoId, uint8_t& celsius) {
   return readData8(servoId, kServoTemperatureLimit, celsius);
 }
 
-uint8_t DynamixelBus::setVoltageLimits(uint8_t servoId, uint8_t lowMv, uint8_t highMv) {
+uint8_t DynamixelBus::setVoltageLimits(uint8_t servoId, uint16_t lowMv, uint16_t highMv) {
+  lowMv /= 100;
+  highMv /= 100;
   return writeData8(servoId, kServoLowVoltageLimit, lowMv, highMv);
 }
 
-uint8_t DynamixelBus::getVoltageLimits(uint8_t servoId, uint8_t& lowMv, uint8_t& highMv) {
-  return readData8(servoId, kServoLowVoltageLimit, lowMv, highMv);
+uint8_t DynamixelBus::getVoltageLimits(uint8_t servoId, uint16_t& lowMv, uint16_t& highMv) {
+  uint8_t low, high;
+  uint8_t error = readData8(servoId, kServoLowVoltageLimit, low, high);
+  if (!error) {
+    lowMv = low * 100;
+    highMv = high * 100;
+  }
+  return error;
 }
 
 uint8_t DynamixelBus::setInitialTorqueLimit(uint8_t servoId, uint16_t limit) {
@@ -375,11 +468,14 @@ uint8_t DynamixelBus::setStatusReturnLevel(uint8_t servoId, uint8_t level) {
 }
 
 uint8_t DynamixelBus::getStatusReturnLevel(uint8_t servoId, uint8_t& level) {
-  uint8_t error = readData8(servoId, kServoStatusReturnLevel, level);
-  if (error == 0 && servoId != 0xFE) {
-    mpServoState[servoId].mStatusReturnLevel = level;
+  if (checkReadStatus(servoId)) {
+    uint8_t error = readData8(servoId, kServoStatusReturnLevel, level);
+    if (error == 0) {
+       mpServoState[servoId].mStatusReturnLevel = level;
+    }
+    return error;
   }
-  return error;
+  return kOk;
 }
 
 uint8_t DynamixelBus::setAlarmLedTriggers(uint8_t servoId, uint8_t bitmask) {
@@ -406,11 +502,11 @@ uint8_t DynamixelBus::getTorqueEnable(uint8_t servoId, bool& enable) {
   return readDataB(servoId, kServoTorqueEnable, enable);
 }
 
-uint8_t DynamixelBus::setLedState(uint8_t servoId, bool on) {
+uint8_t DynamixelBus::setLed(uint8_t servoId, bool on) {
   return writeDataB(servoId, kServoLed, on);
 }
 
-uint8_t DynamixelBus::getLedState(uint8_t servoId, bool& isOn) {
+uint8_t DynamixelBus::getLed(uint8_t servoId, bool& isOn) {
   return readDataB(servoId, kServoLed, isOn);
 }
 
@@ -503,7 +599,6 @@ uint8_t DynamixelBus::getPresentSpeed(uint8_t servoId, uint16_t& speed) {
 
 
 uint8_t DynamixelBus::getPresentLoad(uint8_t servoId, uint8_t& direction, uint16_t& load) {
-  char buf[20];
   uint16_t value;
   uint8_t error = readData16(servoId, kServoPresentLoadL, value);
   if (!error) {
