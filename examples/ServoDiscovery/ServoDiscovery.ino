@@ -201,8 +201,6 @@ void setup() {
   while(Serial.read() != -1);
 }
 
-bool doAgain = true;
-
 void loop() {
 
   size_t servoCount = 0;
