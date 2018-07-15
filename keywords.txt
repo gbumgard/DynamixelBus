@@ -6,98 +6,98 @@
 # Datatypes (KEYWORD1)
 #######################################
 
-DynamixelBus		KEYWORD1	DynamixelBus	
+DynamixelBus	KEYWORD1	DynamixelBus
 
 #######################################
 # Methods and Functions (KEYWORD2)
 #######################################
 
-begin				KEYWORD2
-setReadTimeout			KEYWORD2
-setMaxRetriesOnError		KEYWORD2
-ping				KEYWORD2
-reset				KEYWORD2
-discover			KEYWORD2
-getModelNumber			KEYWORD2
-getFirmwareVersion		KEYWORD2
-setId				KEYWORD2
-getId				KEYWORD2
-setBaudRate			KEYWORD2
-getBaudRate			KEYWORD2
-setReturnDelayTime		KEYWORD2
-getReturnDelayTime		KEYWORD2
-setAngleLimits			KEYWORD2
-getAngleLimits			KEYWORD2
-setTemperatureLimit		KEYWORD2
-getTemperatureLimit		KEYWORD2
-setVoltageLimits		KEYWORD2
-getVoltageLimits		KEYWORD2
-setInitialTorqueLimit		KEYWORD2
-getInitialTorqueLimit		KEYWORD2
-setStatusReturnLevel		KEYWORD2
-getStatusReturnLevel		KEYWORD2
-setAlarmLedTriggers		KEYWORD2
-getAlarmLedTriggers		KEYWORD2
+begin	KEYWORD2
+setReadTimeout	KEYWORD2
+setMaxRetriesOnError	KEYWORD2
+ping	KEYWORD2
+reset	KEYWORD2
+discover	KEYWORD2
+getModelNumber	KEYWORD2
+getFirmwareVersion	KEYWORD2
+setId	KEYWORD2
+getId	KEYWORD2
+setBaudRate	KEYWORD2
+getBaudRate	KEYWORD2
+setReturnDelayTime	KEYWORD2
+getReturnDelayTime	KEYWORD2
+setAngleLimits	KEYWORD2
+getAngleLimits	KEYWORD2
+setTemperatureLimit	KEYWORD2
+getTemperatureLimit	KEYWORD2
+setVoltageLimits	KEYWORD2
+getVoltageLimits	KEYWORD2
+setInitialTorqueLimit	KEYWORD2
+getInitialTorqueLimit	KEYWORD2
+setStatusReturnLevel	KEYWORD2
+getStatusReturnLevel	KEYWORD2
+setAlarmLedTriggers	KEYWORD2
+getAlarmLedTriggers	KEYWORD2
 setAlarmShutdownTriggers	KEYWORD2
 getAlarmShutdownTriggers	KEYWORD2
-setTorqueEnable			KEYWORD2
-getTorqueEnable			KEYWORD2
-setLedState			KEYWORD2
-getLedState			KEYWORD2
-setComplianceMargin		KEYWORD2
-setComplianceMargins		KEYWORD2
-getComplianceMargins		KEYWORD2
-setComplianceSlope		KEYWORD2
-setComplianceSlopes		KEYWORD2
-getComplianceSlopes		KEYWORD2
-setGoalPosition			KEYWORD2
-getGoalPosition			KEYWORD2
-setGoalSpeed			KEYWORD2
-getGoalSpeed			KEYWORD2
-setEndlessTurn			KEYWORD2
-getEndlessTurn			KEYWORD2
-setTorqueLimit			KEYWORD2
-getTorqueLimit			KEYWORD2
-getPresentPosition		KEYWORD2
-getPresentSpeed			KEYWORD2
-getPresentLoad			KEYWORD2
-getPresentVoltage		KEYWORD2
-getPresentTemperature		KEYWORD2
-getMoving			KEYWORD2
-setLock				KEYWORD2
-getLock				KEYWORD2
-setPunch			KEYWORD2
-getPunch			KEYWORD2
+setTorqueEnable	KEYWORD2
+getTorqueEnable	KEYWORD2
+setLedState	KEYWORD2
+getLedState	KEYWORD2
+setComplianceMargin	KEYWORD2
+setComplianceMargins	KEYWORD2
+getComplianceMargins	KEYWORD2
+setComplianceSlope	KEYWORD2
+setComplianceSlopes	KEYWORD2
+getComplianceSlopes	KEYWORD2
+setGoalPosition	KEYWORD2
+getGoalPosition	KEYWORD2
+setGoalSpeed	KEYWORD2
+getGoalSpeed	KEYWORD2
+setEndlessTurn	KEYWORD2
+getEndlessTurn	KEYWORD2
+setTorqueLimit	KEYWORD2
+getTorqueLimit	KEYWORD2
+getPresentPosition	KEYWORD2
+getPresentSpeed	KEYWORD2
+getPresentLoad	KEYWORD2
+getPresentVoltage	KEYWORD2
+getPresentTemperature	KEYWORD2
+getMoving	KEYWORD2
+setLock	KEYWORD2
+getLock	KEYWORD2
+setPunch	KEYWORD2
+getPunch	KEYWORD2
 
 
 #######################################
 # Constants (LITERAL1)
 #######################################
 
-kRespondToNone		LITERAL1
-kRespondToRead		LITERAL1
-kRespondToAll		LITERAL1
-kClockwise		LITERAL1
+kRespondToNone	LITERAL1
+kRespondToRead	LITERAL1
+kRespondToAll	LITERAL1
+kClockwise	LITERAL1
 kCounterClockwise	LITERAL1
-kReadError		LITERAL1
+kReadError	LITERAL1
 kReadTimeOutError	LITERAL1
 kReadFramingError	LITERAL1
 kReadChecksumError	LITERAL1
 kInstructionError	LITERAL1
-kOverloadError		LITERAL1
-kChecksumError		LITERAL1
-kRangeError		LITERAL1
+kOverloadError	LITERAL1
+kChecksumError	LITERAL1
+kRangeError	LITERAL1
 kTemperatureLimitError	LITERAL1
 kAngleLimitError	LITERAL1
 kVoltageLimitError	LITERAL1
-k9600			LITERAL1
-k19200			LITERAL1
-k57600			LITERAL1
-k115200			LITERAL1
-k200000			LITERAL1
-k250000			LITERAL1
-k400000			LITERAL1
-k500000			LITERAL1
-k1000000		LITERAL1
+k9600	LITERAL1
+k19200	LITERAL1
+k57600	LITERAL1
+k115200	LITERAL1
+k200000	LITERAL1
+k250000	LITERAL1
+k400000	LITERAL1
+k500000	LITERAL1
+k1000000	LITERAL1
 
 
